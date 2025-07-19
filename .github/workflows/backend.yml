@@ -1,15 +1,14 @@
-name: Node.js CI
+name: Backend CI/CD
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ master ]
+    branches: [ main, master ]
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v3
     - name: Use Node.js
@@ -17,5 +16,24 @@ jobs:
       with:
         node-version: '20'
     - run: npm install
-    # - run: npm run build # Uncomment if you have a build step
-    # - run: npm test      # Uncomment if you have tests 
+    - run: npm test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Deploy to AWS EC2
+      uses: appleboy/ssh-action@v0.1.5
+      with:
+        host: ${{ secrets.AWS_HOST }}
+        username: ${{ secrets.AWS_USERNAME }}
+        key: ${{ secrets.AWS_SSH_KEY }}
+        script: |
+          cd /home/ubuntu/payment-collection-backend
+          git pull origin main
+          npm install
+          pm2 restart backend || pm2 start app.js --name backend 

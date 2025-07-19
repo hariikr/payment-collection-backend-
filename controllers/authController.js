@@ -19,9 +19,33 @@ exports.login = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-    const token = jwt.sign({ id: user.id, account_number: user.account_number }, process.env.JWT_SECRET, { expiresIn: '1d' });
-    res.json({ token });
+    const token = jwt.sign({ id: user.id, account_number: user.account_number }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const refreshToken = jwt.sign({ id: user.id, account_number: user.account_number }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, refreshToken, user: { id: user.id, account_number: user.account_number } });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+exports.refreshToken = async (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) {
+    return res.status(401).json({ message: 'Refresh token required' });
+  }
+  
+  try {
+    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+    const [rows] = await pool.query('SELECT * FROM customers WHERE id = ?', [decoded.id]);
+    if (rows.length === 0) {
+      return res.status(401).json({ message: 'Invalid refresh token' });
+    }
+    
+    const user = rows[0];
+    const newToken = jwt.sign({ id: user.id, account_number: user.account_number }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const newRefreshToken = jwt.sign({ id: user.id, account_number: user.account_number }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    
+    res.json({ token: newToken, refreshToken: newRefreshToken });
+  } catch (err) {
+    res.status(401).json({ message: 'Invalid refresh token' });
   }
 }; 
